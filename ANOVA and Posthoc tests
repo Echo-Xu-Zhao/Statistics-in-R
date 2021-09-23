@@ -1,0 +1,91 @@
+https://statsandr.com/blog/anova-in-r/#tukey-hsd-test
+
+library(palmerpenguins)
+library(tidyverse)
+
+penguins
+
+dat <- penguins[, c("species", "flipper_length_mm")] 
+summary(dat)
+
+library(ggplot2)
+
+ggplot(dat) +
+  aes(x = species, y = flipper_length_mm, color = species) +
+  geom_jitter() +
+  theme(legend.position = "none")
+
+res_aov <- aov(flipper_length_mm ~ species,  # variable ~ group
+               data = dat) # aov is short for ANOVA
+
+par(mfrow = c(1, 2)) # combine plots
+
+# histogram to check normality visually
+hist(res_aov$residuals)
+
+# QQ-plot
+library(car)
+qqPlot(res_aov$residuals,
+       id = FALSE # id = FALSE to remove point identification
+)
+
+
+##### preliminary plot
+library(ggplot2)
+
+ggplot(dat) +
+  aes(x = species, y = flipper_length_mm) +
+  geom_boxplot()
+
+# test the mean and sd
+aggregate(flipper_length_mm ~ species,
+          data = dat,
+          function(x) round(c(mean = mean(x), sd = sd(x)), 2)
+)
+#OR
+library(dplyr)
+
+group_by(dat, species) %>%
+  summarise(
+    mean = mean(flipper_length_mm, na.rm = TRUE),
+    sd = sd(flipper_length_mm, na.rm = TRUE)
+  )
+
+##### one way anova
+res_aov <- aov(flipper_length_mm ~ species,
+               data = dat)
+
+summary(res_aov) ## if sig (p<0.05), the null hypothesis is rejected, then contiue with Post-hoc test
+
+
+############# Post-hoc test, to see which groups are different from the other
+
+library(multcomp)
+
+######## Tukey HSD test: all comparisons between groups at the cost of less power
+post_test <- glht(res_aov,
+                  linfct = mcp(species = "Tukey"))
+summary(post_test)
+ # the result of the post-hoc test can be visualized 
+par(mar = c(3, 8, 3, 3))
+plot(post_test)
+
+######## Dunnett's test: comparisons with a reference group with the benefit of more power
+library(multcomp)
+
+# Change reference category:
+dat$species <- relevel(dat$species, ref = "Gentoo")
+
+# Check that Gentoo is the reference category:
+levels(dat$species)
+# Dunnett's test
+post_test <- glht(res_aov, linfct = mcp(species = "Dunnett"))
+
+summary(post_test)
+# In order to perform the Dunnett’s test with the new reference 
+# we first need to rerun the ANOVA to take into account the new reference:
+res_aov2 <- aov(flipper_length_mm ~ species, data = dat)
+# Dunnett's test:
+post_test <- glht(res_aov2, linfct = mcp(species = "Dunnett"))
+
+summary(post_test)
